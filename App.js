@@ -5,7 +5,7 @@ import hotBackground from "./assets/hot.png";
 import coldBackground from "./assets/cold.png";
 import { Input } from "./components/Input/Input";
 import { DisplayTemperature } from "./components/DisplayTemperature/DisplayTemperature";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   convertTemperatureTo,
   getOppositeUnit,
@@ -15,14 +15,13 @@ import { ButtonConverter } from "./components/ButtonConverter/ButtonConverter";
 import * as Device from "expo-device";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
-// import { StatusBar } from "expo-status-bar";
 
 // ******* PART OF EXPO CODE STARTS **********
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
-    shouldPlaySound: false,
+    shouldPlaySound: true,
     shouldSetBadge: false,
   }),
 });
@@ -34,12 +33,31 @@ export default function App() {
   const [currentUnit, SetCurrentUnit] = useState("*C");
   const [currentBackground, SetCurrentBackground] = useState(hotBackground);
   const oppositeUnit = getOppositeUnit(currentUnit);
-  let my_token = "";
 
   // *********** EXPO Notification code starts ***********
 
+  const [expoPushToken, setExpoPushToken] = useState("");
+
+  const [notification, setNotification] = useState(undefined);
+  const [channels, setChannels] = useState([]);
+  const notificationListener = useRef();
+  const responseListener = useRef();
+
+  // const [notification, setNotification] = (useState < Notifications.Notification) | (undefined > undefined);
+  // const [channels, setChannels] = useState<Notifications.NotificationChannel[]>([]);
+  // const notificationListener = useRef<Notifications.EventSubscription>();
+  // const responseListener = useRef<Notifications.EventSubscription>();
+
   useEffect(() => {
-    my_token = subscribeToNotifications();
+    subscribeToNotifications().then(
+      (token) => token && setExpoPushToken(token)
+    );
+
+    if (Platform.OS === "android") {
+      Notifications.getNotificationChannelsAsync().then((value) =>
+        setChannels(value ?? [])
+      );
+    }
 
     // App is in background or killed and then the notification is pressed
     Notifications.addNotificationResponseReceivedListener((response) => {
@@ -59,32 +77,18 @@ export default function App() {
         "addNotificationReceivedListener: ",
         notification.request.content
       );
+      setNotification(notification);
     });
+
+    return () => {
+      notificationListener.current &&
+        Notifications.removeNotificationSubscription(
+          notificationListener.current
+        );
+      responseListener.current &&
+        Notifications.removeNotificationSubscription(responseListener.current);
+    };
   }, []);
-
-  // *********** EXPO Notification code ends ***********
-
-  useEffect(() => {
-    return isColdTemperature(inputValue, currentUnit)
-      ? SetCurrentBackground(coldBackground)
-      : SetCurrentBackground(hotBackground);
-  }, [inputValue, currentUnit]);
-
-  function getConvertedTemperature() {
-    if (isNaN(inputValue)) {
-      return "";
-    } else {
-      return convertTemperatureTo(inputValue, oppositeUnit).toFixed(2);
-    }
-  }
-
-  function changeBackgroundImage() {
-    return isColdTemperature(inputValue, currentUnit)
-      ? coldBackground
-      : hotBackground;
-  }
-
-  // *********** EXPO Notification code STARTS ***********
 
   async function subscribeToNotifications() {
     let token;
@@ -107,6 +111,7 @@ export default function App() {
 
       const { status: existingStatus } =
         await Notifications.getPermissionsAsync();
+
       let finalStatus = existingStatus;
       if (existingStatus !== "granted") {
         const { status } = await Notifications.requestPermissionsAsync(); // Asking for Permission again
@@ -132,12 +137,10 @@ export default function App() {
         if (!projectId) {
           throw new Error("Project ID not found");
         }
-        token = (
-          await Notifications.getExpoPushTokenAsync({
-            projectId,
-          })
-        ).data;
-        Alert.alert(token);
+
+        token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+
+        // Alert.alert(token);
         console.log(token);
       } catch (e) {
         console.log("Error: ", e);
@@ -151,6 +154,26 @@ export default function App() {
   }
 
   // *********** EXPO Notification code ENDS ***********
+
+  useEffect(() => {
+    return isColdTemperature(inputValue, currentUnit)
+      ? SetCurrentBackground(coldBackground)
+      : SetCurrentBackground(hotBackground);
+  }, [inputValue, currentUnit]);
+
+  function getConvertedTemperature() {
+    if (isNaN(inputValue)) {
+      return "";
+    } else {
+      return convertTemperatureTo(inputValue, oppositeUnit).toFixed(2);
+    }
+  }
+
+  function changeBackgroundImage() {
+    return isColdTemperature(inputValue, currentUnit)
+      ? coldBackground
+      : hotBackground;
+  }
 
   return (
     <ImageBackground source={currentBackground} style={styles.backgroundImg}>
