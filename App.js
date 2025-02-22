@@ -54,9 +54,10 @@ export default function App() {
     );
 
     if (Platform.OS === "android") {
-      Notifications.getNotificationChannelsAsync().then((value) =>
-        setChannels(value ?? [])
-      );
+      Notifications.getNotificationChannelsAsync().then((value) => {
+        console.log("Channel Value: ", value);
+        setChannels(value ?? []);
+      });
     }
 
     // App is in background or killed and then the notification is pressed
